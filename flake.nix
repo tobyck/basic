@@ -28,8 +28,23 @@
 			'';
 		};
 
-		devShell = pkgs.mkShell {
-			buildInputs = build-deps ++ [ pkgs.valgrind ];
+		devShells = {
+			default = pkgs.mkShell {
+				buildInputs = build-deps ++ (with pkgs; [
+						valgrind
+				]);
+			};
+
+			emulator = let
+			  riscv-pkgs = import <nixpkgs> {
+					crossSystem = (import <nixpkgs/lib>).systems.examples.riscv32;
+				};
+			in riscv-pkgs.mkShell {
+				depsBuildBuild = [
+					riscv-pkgs.coreutils
+					pkgs.qemu
+				];
+			};
 		};
 	});
 }
