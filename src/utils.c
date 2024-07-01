@@ -26,18 +26,36 @@ char *alloc_empty_str() {
 
 void append_str(char **dest, char *src) {
 	*dest = realloc(*dest, strlen(*dest) + strlen(src) + 1);
+
+	if (*dest == NULL) {
+		printf("Could not allocate memory to make space to concatenate a string (append_str)\n")
+		exit(EXIT_FAILURE);
+	}
+
 	strcat(*dest, src);
 }
 
 void append_char(char **dest, char ch) {
 	size_t dest_len = strlen(*dest);
 	*dest = realloc(*dest, dest_len + 2);
+
+	if (*dest == NULL) {
+		printf("Could not allocate memory to make space to concatenate a char (append_char)\n")
+		exit(EXIT_FAILURE);
+	}
+
 	(*dest)[dest_len] = ch;
 	(*dest)[dest_len + 1] = '\0';
 }
 
 void append_str_and_free(char **dest, char *src) {
 	*dest = realloc(*dest, strlen(*dest) + strlen(src) + 1);
+
+	if (*dest == NULL) {
+		printf("Could not allocate memory to make space to concatenate a string (append_str_and_free)\n")
+		exit(EXIT_FAILURE);
+	}
+
 	strcat(*dest, src);
 	free(src);
 }

@@ -13,8 +13,6 @@ typedef enum {
 	TOKEN_MOD,
 } TokenType;
 
-extern char *stringify_token_type(TokenType token_type);
-
 typedef struct {
 	TokenType type;
 	char *content;
@@ -22,17 +20,10 @@ typedef struct {
 	size_t column;
 } Token;
 
-extern char *stringify_token(Token token);
-
 typedef struct {
 	Token *tokens;
 	size_t length;
 } TokenList;
-
-extern TokenList empty_token_list();
-extern void free_token_list(TokenList tokens);
-extern void push_token(TokenList *list, Token token);
-extern void print_token_list(TokenList list);
 
 // the rust is really getting to me
 typedef struct {
@@ -44,6 +35,16 @@ typedef struct {
 // opposed to something like < which could be followed by something else)
 #define SIMPLE_OPS "=+-*/%"
 
+extern TokenList empty_token_list();
+extern void free_token(Token token);
+extern void free_token_list(TokenList tokens);
+extern void push_token(TokenList *list, Token token);
+
+extern char *stringify_token_type(TokenType token_type);
+extern char *stringify_token(Token token);
+extern void print_token_list(TokenList list);
+
 extern LexerResult lex(char *code, size_t code_length);
+extern void free_lexer_result(LexerResult result);
 
 #endif // INCLUDE_LEXER_H

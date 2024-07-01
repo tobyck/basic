@@ -33,6 +33,12 @@ void free_token_list(TokenList tokens) {
 
 void push_token(TokenList *list, Token token) {
 	list->tokens = realloc(list->tokens, sizeof(Token) * (list->length + 1));
+
+	if (list->tokens == NULL) {
+		printf("Could not reallocate memory for a new token\n");
+		exit(EXIT_FAILURE);
+	}
+
 	list->tokens[list->length++] = token;
 }
 
@@ -117,7 +123,7 @@ LexerResult lex(char *code, size_t code_length) {
 				case '/': type = TOKEN_DIV; break;
 				case '%': type = TOKEN_MOD; break;
 				default:
-					return (LexerResult){ tokens, "unknown operator encounterd from SIMPLE_OPS" };
+					return (LexerResult){ tokens, .error = strdup("unknown operator encounterd from SIMPLE_OPS (internal error)") };
 			}
 
 			push_token(&tokens, (Token){ type, NULL, line, i - column_start + 1 });
@@ -131,8 +137,26 @@ LexerResult lex(char *code, size_t code_length) {
 			push_token(&tokens, (Token){ TOKEN_INT, int_as_str, line, column });
 		} else if (isupper(ch)) {
 			push_token(&tokens, (Token){ TOKEN_VAR, alloc_char_as_str(ch), line, i - column_start + 1 });
+		} else {
+			size_t column = i - column_start + 1;
+
+			// feels like way too much heap allocation going on here but oh well
+			char *error_message = alloc_empty_str();
+			append_str(&error_message, "invalid token encountered on line ");
+			append_str_and_free(&error_message, alloc_num_as_str(line));
+			append_str(&error_message, " column ");
+			append_str_and_free(&error_message, alloc_num_as_str(column));
+
+			return (LexerResult){ tokens, error_message };
 		}
 	}
 
-	return (LexerResult){ tokens, NULL };
+	return (LexerResult){ tokens, .error = NULL };
+}
+
+void free_lexer_result(LexerResult result) {
+	free_token_list(result.tokens);
+
+	if (result.error != NULL)
+		free(result.error);
 }

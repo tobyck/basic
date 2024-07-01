@@ -54,7 +54,7 @@ int main(int argc, char *argv[]) {
 		return EXIT_FAILURE;
 	} else {
 		print_token_list(tokens.tokens);
-		free_token_list(tokens.tokens);
+		free_lexer_result(tokens);
 	}
 	
 	free(buffer);
