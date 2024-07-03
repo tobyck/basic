@@ -3,10 +3,11 @@
 #include <stdbool.h>
 #include <string.h>
 #include <math.h>
+#include <ctype.h>
 
-bool str_slice_eq(char *string, size_t slice_start, size_t slice_length, char *slice) {
+bool is_multi_char_token(char *string, size_t slice_start, size_t slice_length, char *slice) {
 	for (size_t i = slice_start; i < slice_start + slice_length; i++)
-		if (string[i] != slice[i - slice_start])
+		if (tolower(string[i]) != tolower(slice[i - slice_start]))
 			return false;
 
 	return true;
@@ -28,7 +29,7 @@ void append_str(char **dest, char *src) {
 	*dest = realloc(*dest, strlen(*dest) + strlen(src) + 1);
 
 	if (*dest == NULL) {
-		printf("Could not allocate memory to make space to concatenate a string (append_str)\n")
+		printf("Could not allocate memory to make space to concatenate a string (append_str)\n");
 		exit(EXIT_FAILURE);
 	}
 
@@ -40,7 +41,7 @@ void append_char(char **dest, char ch) {
 	*dest = realloc(*dest, dest_len + 2);
 
 	if (*dest == NULL) {
-		printf("Could not allocate memory to make space to concatenate a char (append_char)\n")
+		printf("Could not allocate memory to make space to concatenate a char (append_char)\n");
 		exit(EXIT_FAILURE);
 	}
 
@@ -52,7 +53,7 @@ void append_str_and_free(char **dest, char *src) {
 	*dest = realloc(*dest, strlen(*dest) + strlen(src) + 1);
 
 	if (*dest == NULL) {
-		printf("Could not allocate memory to make space to concatenate a string (append_str_and_free)\n")
+		printf("Could not allocate memory to make space to concatenate a string (append_str_and_free)\n");
 		exit(EXIT_FAILURE);
 	}
 

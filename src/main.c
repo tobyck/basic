@@ -50,7 +50,7 @@ int main(int argc, char *argv[]) {
 	LexerResult tokens = lex(buffer, file_length);
 
 	if (tokens.error != NULL) {
-		printf("Lexer error: %s\n", tokens.error);
+		printf("Error: %s\n", tokens.error);
 		return EXIT_FAILURE;
 	} else {
 		print_token_list(tokens.tokens);

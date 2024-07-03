@@ -1,7 +1,7 @@
 #ifndef INCLUDE_PARSER_H
 #define INCLUDE_PARSER_H
 
-#include "lexer.h"
+/* #include "lexer.h"
 
 typedef struct ASTNode ASTNode;
 
@@ -12,7 +12,7 @@ struct ASTNode {
 	union {
 		struct Assignment {
 			char *var; // variable being assigned to
-			AST expr; // expression to evaluate and assign
+			ASTNode expr; // expression to evaluate and assign
 		} assignment;
 	} node;
 };
@@ -28,6 +28,6 @@ typedef struct {
 	char *error;
 } ParserResult;
 
-extern ParserResult parse(TokenList tokens);
+extern ParserResult parse(TokenList tokens); */
 
 #endif  // INCLUDE_PARSER_H

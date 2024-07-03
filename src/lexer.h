@@ -1,6 +1,8 @@
 #ifndef INCLUDE_LEXER_H
 #define INCLUDE_LEXER_H
 
+#include <stddef.h>
+
 typedef enum {
 	TOKEN_LET,
 	TOKEN_VAR,
@@ -11,6 +13,9 @@ typedef enum {
 	TOKEN_MUL,
 	TOKEN_DIV,
 	TOKEN_MOD,
+	TOKEN_OPEN_PAREN,
+	TOKEN_CLOSE_PAREN,
+	TOKEN_END_STATEMENT
 } TokenType;
 
 typedef struct {
@@ -33,7 +38,7 @@ typedef struct {
 
 // operators which we know the meaning of as soon as the lexer sees them (as
 // opposed to something like < which could be followed by something else)
-#define SIMPLE_OPS "=+-*/%"
+#define SIMPLE_TOKENS "=+-*/%()"
 
 extern TokenList empty_token_list();
 extern void free_token(Token token);

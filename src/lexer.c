@@ -53,6 +53,9 @@ char *stringify_token_type(TokenType token_type) {
 		case TOKEN_MUL: return "MUL";
 		case TOKEN_DIV: return "DIV";
 		case TOKEN_MOD: return "MOD";
+		case TOKEN_OPEN_PAREN: return "OPEN_PAREN";
+		case TOKEN_CLOSE_PAREN: return "CLOSE_PAREN";
+		case TOKEN_END_STATEMENT: return "END_STATEMENT";
 	}
 }
 
@@ -105,14 +108,20 @@ LexerResult lex(char *code, size_t code_length) {
 		char ch = code[i];
 		
 		if (ch == '\n') {
+			// only push token if there are already some tokens and the previous token wasn't the same
+			if (tokens.length != 0 && tokens.tokens[tokens.length - 1].type != TOKEN_END_STATEMENT)
+				push_token(&tokens, (Token){ TOKEN_END_STATEMENT, NULL, line, i - column_start + 1 });
+
 			line++;
 			column_start = i + 1;
 		} else if (ch == ' ' || ch == '\t') {
 			continue;
-		} else if (str_slice_eq(code, i, 3, "LET")) {
+		} else if (is_multi_char_token(code, i, 3, "REM")) {
+			for (; code[i + 1] != '\n'; i++);
+		} else if (is_multi_char_token(code, i, 3, "LET")) {
 			push_token(&tokens, (Token){ TOKEN_LET, NULL, line, i - column_start + 1 });
 			i += 2;
-		} else if (strchr(SIMPLE_OPS, ch)) {
+		} else if (strchr(SIMPLE_TOKENS, ch)) {
 			TokenType type;
 
 			switch (ch) {
@@ -122,8 +131,10 @@ LexerResult lex(char *code, size_t code_length) {
 				case '*': type = TOKEN_MUL; break;
 				case '/': type = TOKEN_DIV; break;
 				case '%': type = TOKEN_MOD; break;
+				case '(': type = TOKEN_OPEN_PAREN; break;
+				case ')': type = TOKEN_CLOSE_PAREN; break;
 				default:
-					return (LexerResult){ tokens, .error = strdup("unknown operator encounterd from SIMPLE_OPS (internal error)") };
+					return (LexerResult){ tokens, .error = strdup("unknown operator encounterd from SIMPLE_TOKENS (internal error)") };
 			}
 
 			push_token(&tokens, (Token){ type, NULL, line, i - column_start + 1 });
@@ -135,8 +146,8 @@ LexerResult lex(char *code, size_t code_length) {
 			i--; // once we reach a non-digit we need to go back to avoid skipping the next char
 
 			push_token(&tokens, (Token){ TOKEN_INT, int_as_str, line, column });
-		} else if (isupper(ch)) {
-			push_token(&tokens, (Token){ TOKEN_VAR, alloc_char_as_str(ch), line, i - column_start + 1 });
+		} else if (isalpha(ch)) {
+			push_token(&tokens, (Token){ TOKEN_VAR, alloc_char_as_str(toupper(ch)), line, i - column_start + 1 });
 		} else {
 			size_t column = i - column_start + 1;
 

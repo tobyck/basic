@@ -3,7 +3,7 @@
 
 #include <stdbool.h>
 
-extern bool str_slice_eq(char *string, size_t slice_start, size_t slice_length, char *slice);
+extern bool is_multi_char_token(char *string, size_t slice_start, size_t slice_length, char *slice);
 extern char *alloc_empty_str();
 extern void append_str(char **dest, char *src);
 extern void append_char(char **dest, char ch);

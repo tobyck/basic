@@ -1,5 +1,5 @@
 #include "parser.h"
 
-ParserResult parse(TokenList tokens) {
+/* ParserResult parse(TokenList tokens) {
 
-}
+} */
