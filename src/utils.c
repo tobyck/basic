@@ -5,12 +5,44 @@
 #include <math.h>
 #include <ctype.h>
 
-bool is_multi_char_token(char *string, size_t slice_start, size_t slice_length, char *slice) {
-	for (size_t i = slice_start; i < slice_start + slice_length; i++)
-		if (tolower(string[i]) != tolower(slice[i - slice_start]))
-			return false;
+char *read_file(char *path) {
+	FILE *file = fopen(path, "r");
 
-	return true;
+	if (file == NULL) {
+		printf("Error: could not read file %s\n", path);
+		exit(EXIT_FAILURE);
+	}
+
+	// go to the end of the file, see how long it is, then go back
+	fseek(file, 0, SEEK_END);
+	size_t file_length = ftell(file);
+	fseek(file, 0, SEEK_SET);
+
+	// 0.5GB (probably don't want to load that into memory)
+	const int MAX_FILE_SIZE = 500000000;
+
+	if (file_length > MAX_FILE_SIZE) {
+		printf("Error: file must be less than 0.5GB\n");
+		exit(EXIT_FAILURE);
+	}
+
+	char *buffer = malloc(file_length);
+
+	if (buffer == NULL) {
+		printf("Error: could not allocate buffer for file content\n");
+		exit(EXIT_FAILURE);
+	}
+
+	// read file into memory
+	size_t amount_read = fread(buffer, 1, file_length, file);
+	fclose(file);
+
+	if (amount_read != file_length) {
+		printf("Error: did not manage to read the whole file.\n");
+		exit(EXIT_FAILURE);
+	}
+
+	return buffer;
 }
 
 char *alloc_empty_str() {

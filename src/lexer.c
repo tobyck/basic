@@ -6,42 +6,6 @@
 #include "lexer.h"
 #include "utils.h"
 
-TokenList empty_token_list() {
-	Token *tokens = malloc(0);
-
-	if (tokens == NULL) {
-		printf("Error: could not allocate memory for token list\n");
-		exit(EXIT_FAILURE);
-	}
-
-	return (TokenList){ tokens, 0 };
-}
-
-void free_token(Token token) {
-	if (token.content != NULL) {
-		free(token.content);
-	}
-}
-
-void free_token_list(TokenList tokens) {
-	for (size_t i = 0; i < tokens.length; i++) {
-		free_token(tokens.tokens[i]);
-	}
-
-	free(tokens.tokens);
-}
-
-void push_token(TokenList *list, Token token) {
-	list->tokens = realloc(list->tokens, sizeof(Token) * (list->length + 1));
-
-	if (list->tokens == NULL) {
-		printf("Could not reallocate memory for a new token\n");
-		exit(EXIT_FAILURE);
-	}
-
-	list->tokens[list->length++] = token;
-}
-
 char *stringify_token_type(TokenType token_type) {
 	switch (token_type) {
 		case TOKEN_LET: return "LET";
@@ -55,38 +19,66 @@ char *stringify_token_type(TokenType token_type) {
 		case TOKEN_MOD: return "MOD";
 		case TOKEN_OPEN_PAREN: return "OPEN_PAREN";
 		case TOKEN_CLOSE_PAREN: return "CLOSE_PAREN";
+		case TOKEN_PRINT: return "PRINT";
+		case TOKEN_STRING: return "STRING";
+		case TOKEN_COMMA: return "COMMA";
 		case TOKEN_END_STATEMENT: return "END_STATEMENT";
+		case TOKEN_EOF: return "EOF";
+		case TOKEN_INVALID: return "INVALID";
 	}
 }
 
 char *stringify_token(Token token) {
 	char *string = alloc_empty_str();
 
-	append_str(&string, "{ type: ");
 	append_str(&string, stringify_token_type(token.type));
-	append_str(&string, ", content: ");
 	
-	if (token.content == NULL) {
-		append_str(&string, "NULL");
-	} else {
-		append_str(&string, "\"");
-		append_str(&string, token.content);
+	if (token.literal != NULL) {
+		append_str(&string, " \"");
+		append_str(&string, token.literal);
 		append_str(&string, "\"");
 	}
 
-	append_str(&string, " line: ");
+	append_str(&string, " at ");
 	append_str_and_free(&string, alloc_num_as_str(token.line));
-	append_str(&string, ",");
-
-	append_str(&string, " column: ");
+	append_char(&string, ':');
 	append_str_and_free(&string, alloc_num_as_str(token.column));
-
-	append_str(&string, " }");
 
 	return string;
 }
 
+TokenList empty_token_list() {
+	Token *tokens = malloc(0);
+
+	if (tokens == NULL) {
+		printf("Error: could not allocate memory for token list\n");
+		exit(EXIT_FAILURE);
+	}
+
+	return (TokenList){ tokens, 0 };
+}
+
+void push_token(TokenList *list, Token token) {
+	list->tokens = realloc(list->tokens, sizeof(Token) * (list->length + 1));
+
+	if (list->tokens == NULL) {
+		printf("Error: could not reallocate memory for a new token\n");
+		exit(EXIT_FAILURE);
+	}
+
+	list->tokens[list->length++] = token;
+}
+
+inline Token last_token(TokenList tokens) {
+	return tokens.tokens[tokens.length - 1];
+}
+
 void print_token_list(TokenList list) {
+	if (list.length == 0) {
+		printf("[]\n");
+		return;
+	}
+
 	printf("[");
 
 	for (size_t i = 0; i < list.length; i++) {
@@ -98,76 +90,239 @@ void print_token_list(TokenList list) {
 	}
 }
 
-LexerResult lex(char *code, size_t code_length) {
-	TokenList tokens = empty_token_list();
+void free_token_list(TokenList tokens) {
+	for (size_t i = 0; i < tokens.length; i++)
+		if (tokens.tokens[i].literal != NULL)
+			free(tokens.tokens[i].literal);
 
-	size_t line = 1;
-	size_t column_start = 0;
-
-	for (size_t i = 0; i < code_length; i++) {
-		char ch = code[i];
-		
-		if (ch == '\n') {
-			// only push token if there are already some tokens and the previous token wasn't the same
-			if (tokens.length != 0 && tokens.tokens[tokens.length - 1].type != TOKEN_END_STATEMENT)
-				push_token(&tokens, (Token){ TOKEN_END_STATEMENT, NULL, line, i - column_start + 1 });
-
-			line++;
-			column_start = i + 1;
-		} else if (ch == ' ' || ch == '\t') {
-			continue;
-		} else if (is_multi_char_token(code, i, 3, "REM")) {
-			for (; code[i + 1] != '\n'; i++);
-		} else if (is_multi_char_token(code, i, 3, "LET")) {
-			push_token(&tokens, (Token){ TOKEN_LET, NULL, line, i - column_start + 1 });
-			i += 2;
-		} else if (strchr(SIMPLE_TOKENS, ch)) {
-			TokenType type;
-
-			switch (ch) {
-				case '=': type = TOKEN_EQ; break;
-				case '+': type = TOKEN_ADD; break;
-				case '-': type = TOKEN_SUB; break;
-				case '*': type = TOKEN_MUL; break;
-				case '/': type = TOKEN_DIV; break;
-				case '%': type = TOKEN_MOD; break;
-				case '(': type = TOKEN_OPEN_PAREN; break;
-				case ')': type = TOKEN_CLOSE_PAREN; break;
-				default:
-					return (LexerResult){ tokens, .error = strdup("unknown operator encounterd from SIMPLE_TOKENS (internal error)") };
-			}
-
-			push_token(&tokens, (Token){ type, NULL, line, i - column_start + 1 });
-		} else if (isdigit(ch)) {
-			char *int_as_str = alloc_empty_str();
-			size_t column = i - column_start + 1;
-
-			for (; isdigit(code[i]); i++) append_char(&int_as_str, code[i]);
-			i--; // once we reach a non-digit we need to go back to avoid skipping the next char
-
-			push_token(&tokens, (Token){ TOKEN_INT, int_as_str, line, column });
-		} else if (isalpha(ch)) {
-			push_token(&tokens, (Token){ TOKEN_VAR, alloc_char_as_str(toupper(ch)), line, i - column_start + 1 });
-		} else {
-			size_t column = i - column_start + 1;
-
-			// feels like way too much heap allocation going on here but oh well
-			char *error_message = alloc_empty_str();
-			append_str(&error_message, "invalid token encountered on line ");
-			append_str_and_free(&error_message, alloc_num_as_str(line));
-			append_str(&error_message, " column ");
-			append_str_and_free(&error_message, alloc_num_as_str(column));
-
-			return (LexerResult){ tokens, error_message };
-		}
-	}
-
-	return (LexerResult){ tokens, .error = NULL };
+	free(tokens.tokens);
 }
 
-void free_lexer_result(LexerResult result) {
-	free_token_list(result.tokens);
+LexerErrorList empty_lexer_error_list() {
+	LexerError *errors = malloc(0);
 
-	if (result.error != NULL)
-		free(result.error);
+	if (errors == NULL) {
+		printf("Error: could not allocate memory for lexer error list\n");
+		exit(EXIT_FAILURE);
+	}
+
+	return (LexerErrorList){ errors, 0 };
+}
+
+void push_lexer_error(LexerErrorList *list, LexerError error) {
+	list->errors = realloc(list->errors, sizeof(LexerError) * (list->length + 1));
+
+	if (list->errors == NULL) {
+		printf("Error: could not reallocate memory for new lexer error\n");
+		return;
+	}
+
+	list->errors[list->length++] = error;
+}
+
+void print_lexer_errors(LexerErrorList errors) {
+	if (errors.length == 0) {
+		printf("[]\n");
+		return;
+	}
+
+	printf("[\n");
+
+	for (size_t i = 0; i < errors.length; i++) {
+		LexerError err = errors.errors[i];
+		printf(
+			"  %s (erroneous token starts at: %zu:%zu, error at %zu:%zu)",
+			err.message,
+			err.line,
+			err.start_column,
+			err.line,
+			err.error_column
+		);
+		if (i < errors.length - 1) printf(",\n");
+		else printf("\n]\n");
+	}
+}
+
+void free_lexer_error_list(LexerErrorList errors) {
+	for (size_t i = 0; i < errors.length; i++)
+		free(errors.errors[i].message);
+
+	free(errors.errors);
+}
+
+Lexer *new_lexer(char *code) {
+	Lexer *lexer = malloc(sizeof(Lexer));
+
+	lexer->code = code;
+
+	lexer->result = (LexerResult){
+		empty_token_list(),
+		empty_token_list(),
+		empty_lexer_error_list()
+	};
+
+	lexer->current_index = 0;
+	lexer->line = 1;
+	lexer-> column_start = 0;
+
+	return lexer;
+}
+
+inline char peek(Lexer *lexer) { return lexer->code[lexer->current_index]; }
+inline char peek_nth(Lexer *lexer, size_t n) { return lexer->code[lexer->current_index + n]; }
+inline char consume(Lexer *lexer) { return lexer->code[lexer->current_index++]; }
+
+void lexer_invalid_token(Lexer *lexer, size_t line, size_t column) {
+	Token previous_invalid = last_token(lexer->result.invalid);
+	
+	if (
+		lexer->result.invalid.length > 0 && // if there's already an invalid token
+		// and its column + length = the current column, append to previous token
+		previous_invalid.column + strlen(previous_invalid.literal) == column
+	) append_char(&previous_invalid.literal, consume(lexer));
+	// otherwise push a new invalid token
+	else push_token(&lexer->result.invalid, (Token){
+		TOKEN_INVALID, alloc_char_as_str(consume(lexer)), line, column
+	});
+}
+
+bool case_insensitive_match(Lexer *lexer, char *str) {
+	for (size_t i = 0; i < strlen(str); i++)
+		if (tolower(lexer->code[lexer->current_index + i]) != tolower(str[i]))
+			return false;
+
+	return true;
+}
+
+LexerResult lex(char *code) {
+	Lexer *lexer = new_lexer(code);
+
+	while (peek(lexer) != '\0') {
+		// consume whitespace
+		while (peek(lexer) == ' ' || peek(lexer) == '\t') consume(lexer);
+
+		// consume comments
+		if (case_insensitive_match(lexer, "rem"))
+			while (peek(lexer) != '\n')
+				consume(lexer);
+
+		// line and column of token that's about to be determined
+		size_t l = lexer->line;
+		size_t c = lexer->current_index - lexer->column_start + 1;
+
+		if (peek(lexer) == '\n') {
+			consume(lexer);
+			lexer->line++;
+			lexer->column_start = lexer->current_index;
+
+			// if there are no tokens or the previous token was an END_STATEMENT then we're not actually
+			// ending a statement, so only push token if that's not the case
+			if (lexer->result.valid.length > 0 && last_token(lexer->result.valid).type != TOKEN_END_STATEMENT)
+				push_token(&lexer->result.valid, (Token){ TOKEN_END_STATEMENT, NULL, l, c });
+
+			continue;
+		}
+		
+		// simple single char tokens
+
+		#define simple_token_case(char, type) \
+			case char: \
+				push_token(&lexer->result.valid, (Token){ type, NULL, l, c }); \
+				consume(lexer); \
+				continue;
+
+		switch (peek(lexer)) {
+			simple_token_case('=', TOKEN_EQ)
+			simple_token_case('+', TOKEN_ADD)
+			simple_token_case('-', TOKEN_SUB)
+			simple_token_case('*', TOKEN_MUL)
+			simple_token_case('/', TOKEN_DIV)
+			simple_token_case('%', TOKEN_MOD)
+			simple_token_case('(', TOKEN_OPEN_PAREN)
+			simple_token_case(')', TOKEN_CLOSE_PAREN)
+			simple_token_case(',', TOKEN_COMMA)
+		}
+
+		// keywords
+
+		#define keyword_token(keyword, type) \
+			if (case_insensitive_match(lexer, keyword)) { \
+				lexer->current_index += strlen(keyword); \
+				push_token(&lexer->result.valid, (Token){ type, NULL, l, c }); \
+				continue; \
+			}
+
+		keyword_token("let", TOKEN_LET)
+		keyword_token("print", TOKEN_PRINT)
+
+		// numbers
+
+		if (isdigit(peek(lexer))) {
+			char *literal = alloc_empty_str();
+			while (isdigit(peek(lexer)))
+				append_char(&literal, consume(lexer));
+
+			if (peek(lexer) == '.' && peek(lexer)) {
+				push_lexer_error(&lexer->result.errors, (LexerError){
+					strdup("Tiny BASIC does not support decimal numbers"),
+					.line = l,
+					.start_column = c,
+					.error_column = lexer->current_index - lexer->column_start + 1
+				});
+				consume(lexer);
+			} else
+				push_token(&lexer->result.valid, (Token){ TOKEN_INT, literal, l, c });
+
+
+			continue;
+		}
+
+		// strings
+
+		if (peek(lexer) == '"') {
+			consume(lexer); // consume opening quotes
+			char *string = alloc_empty_str();
+
+			while (peek(lexer) != '"') {
+				// if string ends early without quotes
+				if (peek(lexer) == '\0' || peek(lexer) == '\n') {
+					push_lexer_error(&lexer->result.errors, (LexerError){
+						strdup("Expected closing double quotes to match the opening ones"),
+						.line = l,
+						.start_column = c,
+						.error_column = lexer->current_index - lexer->column_start + 1
+					});
+					goto continue_main_lexer_loop;
+				}
+
+				append_char(&string, consume(lexer));
+			}
+
+			consume(lexer); // consume closing quotes
+			push_token(&lexer->result.valid, (Token){ TOKEN_STRING, string, l, c });
+			continue;
+		}
+
+		// vars
+
+		Token previous_token = last_token(lexer->result.valid);
+		if (
+			isalpha(peek(lexer)) &&
+			lexer->current_index > 0 &&
+			!isalpha(peek_nth(lexer, 1)) &&
+			!isalpha(peek_nth(lexer, -1))
+		) {
+			push_token(&lexer->result.valid, (Token){
+				TOKEN_VAR, alloc_char_as_str(toupper(consume(lexer))), l, c
+			});
+			consume(lexer);
+			continue;
+		}
+
+		lexer_invalid_token(lexer, l, c);
+
+		continue_main_lexer_loop:;
+	}
+
+	return lexer->result;
 }

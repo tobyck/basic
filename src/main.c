@@ -1,7 +1,9 @@
 #include <stdlib.h>
 #include <stdio.h>
+#include <stdbool.h>
 
 #include "lexer.h"
+#include "utils.h"
 
 int main(int argc, char *argv[]) {
 	if (argc > 2) {
@@ -11,53 +13,15 @@ int main(int argc, char *argv[]) {
 		return EXIT_SUCCESS;
 	}
 	
-	FILE *file_ptr = fopen(argv[1], "r");
-
-	if (file_ptr == NULL) {
-		printf("Error: could not read file %s\n", argv[0]);
-		return EXIT_FAILURE;
-	}
+	char *code = read_file(argv[1]);
 	
-	// go to the end of the file, see how long it is, then go back
-	fseek(file_ptr, 0, SEEK_END);
-	size_t file_length = ftell(file_ptr);
-	fseek(file_ptr, 0, SEEK_SET);
+	LexerResult tokens = lex(code);
 
-	// 0.5GB (probably don't want to load that into memory)
-	const int MAX_FILE_SIZE = 500000000;
+	print_token_list(tokens.valid);
+	print_token_list(tokens.invalid);
+	print_lexer_errors(tokens.errors);
 
-	if (file_length > MAX_FILE_SIZE) {
-		printf("Error: file must be less than 0.5GB\n");
-		return EXIT_FAILURE;
-	}
-
-	// read all content into memory
-	char *buffer = malloc(file_length);
-
-	if (buffer == NULL) {
-		printf("Error: could not allocate buffer for file content\n");
-		return EXIT_FAILURE;
-	}
-
-	size_t amount_read = fread(buffer, 1, file_length, file_ptr);
-	fclose(file_ptr);
-
-	if (amount_read != file_length) {
-		printf("Error: did not manage to read the whole file.\n");
-		return EXIT_FAILURE;
-	}
-
-	LexerResult tokens = lex(buffer, file_length);
-
-	if (tokens.error != NULL) {
-		printf("Error: %s\n", tokens.error);
-		return EXIT_FAILURE;
-	} else {
-		print_token_list(tokens.tokens);
-		free_lexer_result(tokens);
-	}
+	// free_lexer_result(tokens);
 	
-	free(buffer);
-
 	return EXIT_SUCCESS;
 }
