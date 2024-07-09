@@ -173,6 +173,7 @@ inline char peek_nth(Lexer *lexer, size_t n) { return lexer->code[lexer->current
 inline char consume(Lexer *lexer) { return lexer->code[lexer->current_index++]; }
 
 void lexer_invalid_token(Lexer *lexer, size_t line, size_t column) {
+	printf("whaaaat\n");
 	Token previous_invalid = last_token(lexer->result.invalid);
 	
 	if (
@@ -259,6 +260,7 @@ LexerResult lex(char *code) {
 
 		if (isdigit(peek(lexer))) {
 			char *literal = alloc_empty_str();
+
 			while (isdigit(peek(lexer)))
 				append_char(&literal, consume(lexer));
 
@@ -270,9 +272,9 @@ LexerResult lex(char *code) {
 					.error_column = lexer->current_index - lexer->column_start + 1
 				});
 				consume(lexer);
+				free(literal);
 			} else
 				push_token(&lexer->result.valid, (Token){ TOKEN_INT, literal, l, c });
-
 
 			continue;
 		}
@@ -292,6 +294,7 @@ LexerResult lex(char *code) {
 						.start_column = c,
 						.error_column = lexer->current_index - lexer->column_start + 1
 					});
+					free(string);
 					goto continue_main_lexer_loop;
 				}
 
@@ -324,5 +327,15 @@ LexerResult lex(char *code) {
 		continue_main_lexer_loop:;
 	}
 
-	return lexer->result;
+	LexerResult result = lexer->result;
+
+	free(lexer);
+
+	return result;
+}
+
+void free_lexer_result(LexerResult result) {
+	free_token_list(result.valid);
+	free_token_list(result.invalid);
+	free_lexer_error_list(result.errors);
 }

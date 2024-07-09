@@ -21,7 +21,8 @@ int main(int argc, char *argv[]) {
 	print_token_list(tokens.invalid);
 	print_lexer_errors(tokens.errors);
 
-	// free_lexer_result(tokens);
+	free(code);
+	free_lexer_result(tokens);
 	
 	return EXIT_SUCCESS;
 }
