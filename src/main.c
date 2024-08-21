@@ -2,8 +2,9 @@
 #include <stdio.h>
 #include <stdbool.h>
 
-#include "lexer.h"
 #include "utils.h"
+#include "lexer.h"
+#include "parser.h"
 
 int main(int argc, char *argv[]) {
 	if (argc > 2) {
@@ -16,10 +17,13 @@ int main(int argc, char *argv[]) {
 	char *code = read_file(argv[1]);
 	
 	LexerResult tokens = lex(code);
-
 	print_token_list(tokens.valid);
 	print_token_list(tokens.invalid);
 	print_lexer_errors(tokens.errors);
+
+	// AST ast = parse(tokens.valid);
+	// print_ast(ast);
+	// free_ast(ast);
 
 	free(code);
 	free_lexer_result(tokens);

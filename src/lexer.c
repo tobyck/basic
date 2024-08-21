@@ -9,14 +9,12 @@
 char *stringify_token_type(TokenType token_type) {
 	switch (token_type) {
 		case TOKEN_LET: return "LET";
-		case TOKEN_VAR: return "VAR";
-		case TOKEN_EQ: return "EQ";
+		case TOKEN_NAME: return "NAME";
+		case TOKEN_ASSIGN: return "ASSIGN";
 		case TOKEN_INT: return "INT";
-		case TOKEN_ADD: return "ADD";
-		case TOKEN_SUB: return "SUB";
-		case TOKEN_MUL: return "MUL";
-		case TOKEN_DIV: return "DIV";
-		case TOKEN_MOD: return "MOD";
+		case TOKEN_NEGATE: return "NEGATE";
+		case TOKEN_BINARY_OP: return "BINARY_OP";
+		case TOKEN_UNARY_OP: return "UNARY_OP";
 		case TOKEN_OPEN_PAREN: return "OPEN_PAREN";
 		case TOKEN_CLOSE_PAREN: return "CLOSE_PAREN";
 		case TOKEN_PRINT: return "PRINT";
@@ -173,14 +171,17 @@ inline char peek_nth(Lexer *lexer, size_t n) { return lexer->code[lexer->current
 inline char consume(Lexer *lexer) { return lexer->code[lexer->current_index++]; }
 
 void lexer_invalid_token(Lexer *lexer, size_t line, size_t column) {
-	printf("whaaaat\n");
 	Token previous_invalid = last_token(lexer->result.invalid);
 	
 	if (
 		lexer->result.invalid.length > 0 && // if there's already an invalid token
 		// and its column + length = the current column, append to previous token
+		// i.e. this invalid char is directly next to the previous invalid token
 		previous_invalid.column + strlen(previous_invalid.literal) == column
-	) append_char(&previous_invalid.literal, consume(lexer));
+	)
+		// append the char to the previous invalid token
+		append_char(&lexer->result.invalid.tokens[lexer->result.invalid.length - 1].literal, consume(lexer));
+
 	// otherwise push a new invalid token
 	else push_token(&lexer->result.invalid, (Token){
 		TOKEN_INVALID, alloc_char_as_str(consume(lexer)), line, column
@@ -226,6 +227,7 @@ LexerResult lex(char *code) {
 		
 		// simple single char tokens
 
+		// simple case where a single char is mapped to single token with no additional info
 		#define simple_token_case(char, type) \
 			case char: \
 				push_token(&lexer->result.valid, (Token){ type, NULL, l, c }); \
@@ -233,12 +235,30 @@ LexerResult lex(char *code) {
 				continue;
 
 		switch (peek(lexer)) {
-			simple_token_case('=', TOKEN_EQ)
-			simple_token_case('+', TOKEN_ADD)
-			simple_token_case('-', TOKEN_SUB)
-			simple_token_case('*', TOKEN_MUL)
-			simple_token_case('/', TOKEN_DIV)
-			simple_token_case('%', TOKEN_MOD)
+			case '+':
+			case '*':
+			case '/':
+			case '%':
+				push_token(&lexer->result.valid, (Token){
+					TOKEN_BINARY_OP, alloc_char_as_str(consume(lexer)), l, c
+				});
+				continue;
+			case '-': {
+				char *literal = alloc_char_as_str(consume(lexer));
+				switch (last_token(lexer->result.valid).type) {
+					case TOKEN_CLOSE_PAREN:
+					case TOKEN_INT:
+					case TOKEN_NAME:
+						push_token(&lexer->result.valid, (Token){
+							TOKEN_BINARY_OP, literal, l, c
+						});
+						break;
+					default:
+						push_token(&lexer->result.valid, (Token){ TOKEN_UNARY_OP, literal, l, c });
+				}
+				continue;
+			}
+			simple_token_case('=', TOKEN_ASSIGN)
 			simple_token_case('(', TOKEN_OPEN_PAREN)
 			simple_token_case(')', TOKEN_CLOSE_PAREN)
 			simple_token_case(',', TOKEN_COMMA)
@@ -306,19 +326,15 @@ LexerResult lex(char *code) {
 			continue;
 		}
 
-		// vars
+		// names (vars/functions)
 
-		Token previous_token = last_token(lexer->result.valid);
-		if (
-			isalpha(peek(lexer)) &&
-			lexer->current_index > 0 &&
-			!isalpha(peek_nth(lexer, 1)) &&
-			!isalpha(peek_nth(lexer, -1))
-		) {
+		if (isalpha(peek(lexer))) {
+			char *name = alloc_char_as_str(consume(lexer));
+			while (isalpha(peek(lexer)))
+				append_char(&name, consume(lexer));
 			push_token(&lexer->result.valid, (Token){
-				TOKEN_VAR, alloc_char_as_str(toupper(consume(lexer))), l, c
+				TOKEN_NAME, name, l, c
 			});
-			consume(lexer);
 			continue;
 		}
 

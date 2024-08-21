@@ -26,7 +26,7 @@ char *read_file(char *path) {
 		exit(EXIT_FAILURE);
 	}
 
-	char *buffer = malloc(file_length);
+	char *buffer = malloc(file_length + 1);
 
 	if (buffer == NULL) {
 		printf("Error: could not allocate buffer for file content\n");
@@ -36,6 +36,8 @@ char *read_file(char *path) {
 	// read file into memory
 	size_t amount_read = fread(buffer, 1, file_length, file);
 	fclose(file);
+
+	buffer[file_length] = '\0';
 
 	if (amount_read != file_length) {
 		printf("Error: did not manage to read the whole file.\n");
