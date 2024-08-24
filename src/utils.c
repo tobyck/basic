@@ -19,7 +19,7 @@ char *read_file(char *path) {
 	fseek(file, 0, SEEK_SET);
 
 	// 0.5GB (probably don't want to load that into memory)
-	const int MAX_FILE_SIZE = 500000000;
+	const size_t MAX_FILE_SIZE = 500000000;
 
 	if (file_length > MAX_FILE_SIZE) {
 		printf("Error: file must be less than 0.5GB\n");
@@ -96,7 +96,7 @@ void append_str_and_free(char **dest, char *src) {
 }
 
 char *alloc_num_as_str(size_t number) {
-	int string_len;
+	size_t string_len;
 	if (number == 0) string_len = 2;
 	else string_len = (int)log10(number) + 2;
 

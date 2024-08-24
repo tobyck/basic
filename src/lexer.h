@@ -30,6 +30,11 @@ typedef struct Token {
 } Token;
 
 typedef struct {
+	Token *head;
+	Token *tail;
+} TokenLinkedList;
+
+typedef struct {
 	char *message;
 	size_t line;
 	size_t start_column; // where erroneous token begins
@@ -42,8 +47,8 @@ typedef struct {
 } LexerErrorList;
 
 typedef struct {
-	Token *valid;
-	Token *invalid;
+	TokenLinkedList valid;
+	TokenLinkedList invalid;
 	LexerErrorList errors;
 } LexerResult;
 
@@ -55,21 +60,23 @@ typedef struct {
 	size_t column_start;
 } Lexer;
 
+extern char *stringify_token_type(TokenType token_type);
+
 // token linked list
 extern void push_token(
-	Token **head,
+	TokenLinkedList *list,
 	TokenType type,
 	char *literal,
 	size_t line,
 	size_t column
 );
-extern Token pop_token(Token **head);
-extern void free_token_linked_list(Token *head);
+extern Token *pop_token(TokenLinkedList *list);
+extern void free_token(Token *token);
+extern void free_token_linked_list(TokenLinkedList list);
 
 // lexer errors
 extern LexerErrorList empty_lexer_error_list();
 extern void push_lexer_error(LexerErrorList *list, LexerError error);
-extern void free_lexer_error_list(LexerErrorList errors);
 
 // lexer
 extern Lexer *new_lexer(char *code);
@@ -80,6 +87,5 @@ extern bool case_insensitive_match(Lexer *lexer, char *str);
 extern void lexer_invalid_token(Lexer *lexer, size_t line, size_t column);
 
 extern LexerResult lex(char *code);
-extern void free_lexer_result(LexerResult result);
 
 #endif // INCLUDE_LEXER_H

@@ -3,46 +3,25 @@
 #include "debug.h"
 #include "lexer.h"
 
-char *stringify_token_type(TokenType token_type) {
-	switch (token_type) {
-		case TOKEN_LET: return "LET";
-		case TOKEN_NAME: return "NAME";
-		case TOKEN_ASSIGN: return "ASSIGN";
-		case TOKEN_INT: return "INT";
-		case TOKEN_NEGATE: return "NEGATE";
-		case TOKEN_BINARY_OP: return "BINARY_OP";
-		case TOKEN_UNARY_OP: return "UNARY_OP";
-		case TOKEN_OPEN_PAREN: return "OPEN_PAREN";
-		case TOKEN_CLOSE_PAREN: return "CLOSE_PAREN";
-		case TOKEN_PRINT: return "PRINT";
-		case TOKEN_STRING: return "STRING";
-		case TOKEN_COMMA: return "COMMA";
-		case TOKEN_END_STATEMENT: return "END_STATEMENT";
-		case TOKEN_EOF: return "EOF";
-		case TOKEN_INVALID: return "INVALID";
-	}
+void print_token(Token *token) {
+	printf("%s ", stringify_token_type(token->type));
+	if (token->literal != NULL)
+		printf("\"%s\" ", token->literal);
+	printf("at %zu:%zu", token->line, token->column);
 }
 
-void print_token(Token token) {
-printf("%s ", stringify_token_type(token.type));
-	if (token.literal != NULL)
-		printf("\"%s\" ", token.literal);
-	printf("at %zu:%zu", token.line, token.column);
-}
-
-// prints in reverse order because i'm lazy
-void print_token_linked_list(Token *tokens) {
-	if (tokens == NULL) {
+void print_token_linked_list(TokenLinkedList tokens) {
+	if (tokens.head == NULL) {
 		printf("[]\n");
 		return;
 	}
 
 	printf("[\n");
 
-	Token *current = tokens;
+	Token *current = tokens.head;
 	while (current != NULL) {
 		printf("  ");
-		print_token(*current);
+		print_token(current);
 		if (current->next != NULL)
 			printf(",\n");
 		current = current->next;
@@ -77,10 +56,10 @@ void print_lexer_errors(LexerErrorList errors) {
 
 void print_expr(Expr expr) {
 	switch (expr.type) {
-		case EXPR_INT: printf("(INT %s)", expr.expr.int_literal); break;
-		case EXPR_VAR: printf("(VAR %c)", expr.expr.variable); break;
+		case EXPR_INT: printf("%s", expr.expr.int_literal); break;
+		case EXPR_VAR: printf("%c", expr.expr.variable); break;
 		case EXPR_FUNC:
-			printf("(FUNC %s ", expr.expr.func.name);
+			printf("%s", expr.expr.func.name);
 			print_expr_list(expr.expr.func.args);
 	}
 }
@@ -121,6 +100,24 @@ void print_ast(AST ast) {
 				printf("PRINT ");
 				print_expr_list(s.statement.print);
 		}
+	}
+
+	printf("\n]\n");
+}
+
+void print_parse_errors(ParseErrorList errors) {
+	if (errors.length == 0) {
+		printf("[]\n");
+		return;
+	}
+
+	printf("[\n");
+
+	for (size_t i = 0; i < errors.length; i++) {
+		printf("  '%s' at (", errors.errors[i].message);
+		print_token(errors.errors[i].token);
+		printf(")");
+		if (i < errors.length - 1) printf(",\n");
 	}
 
 	printf("\n]\n");

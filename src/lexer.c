@@ -6,30 +6,69 @@
 #include "lexer.h"
 #include "utils.h"
 
-void push_token(Token **head, TokenType type, char *literal, size_t line, size_t column) {
-	// create new token which will be the head
+char *stringify_token_type(TokenType token_type) {
+	switch (token_type) {
+		case TOKEN_LET: return "LET";
+		case TOKEN_NAME: return "NAME";
+		case TOKEN_ASSIGN: return "ASSIGN";
+		case TOKEN_INT: return "INT";
+		case TOKEN_NEGATE: return "NEGATE";
+		case TOKEN_BINARY_OP: return "BINARY_OP";
+		case TOKEN_UNARY_OP: return "UNARY_OP";
+		case TOKEN_OPEN_PAREN: return "OPEN_PAREN";
+		case TOKEN_CLOSE_PAREN: return "CLOSE_PAREN";
+		case TOKEN_PRINT: return "PRINT";
+		case TOKEN_STRING: return "STRING";
+		case TOKEN_COMMA: return "COMMA";
+		case TOKEN_END_STATEMENT: return "END_STATEMENT";
+		case TOKEN_EOF: return "EOF";
+		case TOKEN_INVALID: return "INVALID";
+	}
+}
+
+void push_token(TokenLinkedList *list, TokenType type, char *literal, size_t line, size_t column) {
 	Token *token = malloc(sizeof(Token));
 	token->type = type;
 	token->literal = literal;
 	token->line = line;
 	token->column = column;
-	token->next = *head; // make the new head point to the old one
+	token->next = NULL;
 
-	*head = token;
+	if (list->head == NULL) {
+		list->head = token;
+		list->tail = token;
+	} else {
+		list->tail->next = token;
+		list->tail = token;
+	}
 }
 
-Token pop_token(Token **head) {
-	Token *ret = *head;
-	if (ret)
-		*head = ret->next;
-	return *ret;
+Token *pop_token(TokenLinkedList *list) {
+	if (list->head == NULL) {
+		printf("Error: cannot pop from empty linked list of tokens\n");
+		exit(EXIT_FAILURE);
+	}
+
+	Token *ret = list->head;
+	list->head = ret->next;
+
+	// set tail to null if list is now empty
+	if (list->head == NULL)
+		list->tail = NULL;
+
+	return ret;
 }
 
-void free_token_linked_list(Token *head) {
+void free_token(Token *token) {
+	if (token->literal != NULL) free(token->literal);
+	free(token);
+}
+
+void free_token_linked_list(TokenLinkedList list) {
 	Token *temp;
-	while (head != NULL) {
-		temp = head; // save the current node before we move forward
-		head = head->next;
+	while (list.head != NULL) {
+		temp = list.head; // save the current node before we move forward
+		list.head = list.head->next;
 
 		// free node (and literal if applicable)
 		if (temp->literal != NULL) free(temp->literal);
@@ -59,19 +98,16 @@ void push_lexer_error(LexerErrorList *list, LexerError error) {
 	list->errors[list->length++] = error;
 }
 
-void free_lexer_error_list(LexerErrorList errors) {
-	for (size_t i = 0; i < errors.length; i++)
-		free(errors.errors[i].message);
-
-	free(errors.errors);
-}
-
 Lexer *new_lexer(char *code) {
 	Lexer *lexer = malloc(sizeof(Lexer));
 
 	lexer->code = code;
-	// these two nulls are the heads of the linkend lists of valid/invalid tokens
-	lexer->result = (LexerResult){ NULL, NULL, empty_lexer_error_list() };
+	lexer->result = (LexerResult){
+		// these nulls are the heads and tails of linked lists of tokens
+		{ NULL, NULL },
+		{ NULL, NULL },
+		empty_lexer_error_list()
+	};
 	lexer->current_index = 0;
 	lexer->line = 1;
 	lexer-> column_start = 0;
@@ -95,10 +131,10 @@ bool case_insensitive_match(Lexer *lexer, char *str) {
 void lexer_invalid_token(Lexer *lexer, size_t line, size_t column) {
 	// result.invalid points to the head of a linked list, so we can dereference
 	// that to get the first token
-	Token previous_invalid = *lexer->result.invalid;
+	Token previous_invalid = *lexer->result.invalid.tail;
 	
 	if (
-		lexer->result.invalid != NULL && // if there's already an invalid token and
+		lexer->result.invalid.head != NULL && // if there's already an invalid token and
 		// the current invalid token is right next to the previous one
 		previous_invalid.column + strlen(previous_invalid.literal) == column
 	)
@@ -135,7 +171,7 @@ LexerResult lex(char *code) {
 
 			// if there are no tokens or the previous token was an END_STATEMENT then we're not actually
 			// ending a statement, so only push a token if that's not the case
-			if (lexer->result.valid != NULL && (*lexer->result.valid).type != TOKEN_END_STATEMENT)
+			if (lexer->result.valid.head != NULL && (*lexer->result.valid.tail).type != TOKEN_END_STATEMENT)
 				push_token(&lexer->result.valid, TOKEN_END_STATEMENT, NULL, l, c);
 
 			continue;
@@ -156,16 +192,15 @@ LexerResult lex(char *code) {
 				push_token(&lexer->result.valid, TOKEN_BINARY_OP, alloc_char_as_str(consume(lexer)), l, c);
 				continue;
 			case '-': {
+				Token *previous_token = lexer->result.valid.tail;
 				char *literal = alloc_char_as_str(consume(lexer));
-				switch ((*lexer->result.valid).type) {
-					case TOKEN_CLOSE_PAREN:
-					case TOKEN_INT:
-					case TOKEN_NAME:
-						push_token(&lexer->result.valid, TOKEN_BINARY_OP, literal, l, c);
-						break;
-					default:
-						push_token(&lexer->result.valid, TOKEN_UNARY_OP, literal, l, c);
-				}
+				if (
+					previous_token == NULL ||
+					previous_token->type == TOKEN_CLOSE_PAREN ||
+					previous_token->type == TOKEN_INT ||
+					previous_token->type == TOKEN_NAME
+				) push_token(&lexer->result.valid, TOKEN_BINARY_OP, literal, l, c);
+				else push_token(&lexer->result.valid, TOKEN_UNARY_OP, literal, l, c);
 				continue;
 			}
 			simple_token_case('=', TOKEN_ASSIGN)
@@ -196,7 +231,7 @@ LexerResult lex(char *code) {
 
 			if (peek(lexer) == '.') {
 				push_lexer_error(&lexer->result.errors, (LexerError){
-					strdup("Tiny BASIC does not support decimal numbers"),
+					"Tiny BASIC does not support decimal numbers",
 					.line = l,
 					.start_column = c,
 					.error_column = lexer->current_index - lexer->column_start + 1
@@ -219,7 +254,7 @@ LexerResult lex(char *code) {
 				// if string ends early without quotes
 				if (peek(lexer) == '\0' || peek(lexer) == '\n') {
 					push_lexer_error(&lexer->result.errors, (LexerError){
-						strdup("Expected closing double quotes to match the opening ones"),
+						"Expected closing double quotes to match the opening ones",
 						.line = l,
 						.start_column = c,
 						.error_column = lexer->current_index - lexer->column_start + 1
@@ -256,10 +291,4 @@ LexerResult lex(char *code) {
 	free(lexer);
 
 	return result;
-}
-
-void free_lexer_result(LexerResult result) {
-	free_token_linked_list(result.valid);
-	free_token_linked_list(result.invalid);
-	free_lexer_error_list(result.errors);
 }
