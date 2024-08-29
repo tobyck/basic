@@ -1,6 +1,6 @@
 CC=clang
 BUILD_DIR=./build
-OUT_FILE=$(BUILD_DIR)/tinybc
+OUT_FILE=$(BUILD_DIR)/basic
 FILE=./examples/test.bas
 
 build:

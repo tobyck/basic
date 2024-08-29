@@ -1,6 +1,7 @@
 #include <stdio.h>
 
 #include "debug.h"
+#include "utils.h"
 #include "lexer.h"
 
 void print_token(Token *token) {
@@ -56,11 +57,16 @@ void print_lexer_errors(LexerErrorList errors) {
 
 void print_expr(Expr expr) {
 	switch (expr.type) {
-		case EXPR_INT: printf("%s", expr.expr.int_literal); break;
-		case EXPR_VAR: printf("%c", expr.expr.variable); break;
-		case EXPR_FUNC:
-			printf("%s", expr.expr.func.name);
-			print_expr_list(expr.expr.func.args);
+		case EXPR_NUMBER: printf("%s", expr.expr.number_literal); break;
+		case EXPR_STRING: printf("\"%s\"", expr.expr.string_literal); break;
+		case EXPR_VAR: printf("%s", expr.expr.variable); break;
+		case EXPR_CALL:
+			printf("(%s", expr.expr.call.name);
+			for (size_t i = 0; i < expr.expr.call.args->length; i++) {
+				printf(" ");
+				print_expr(expr.expr.call.args->exprs[i]);
+			}
+			printf(")");
 	}
 }
 
@@ -74,7 +80,8 @@ void print_expr_list(ExprList *exprs) {
 
 	for (size_t i = 0; i < exprs->length; i++) {
 		print_expr(exprs->exprs[i]);
-		if (i < exprs->length - 1) printf(", ");
+		if (i < exprs->length - 1)
+			printf(exprs->stored_delimiters ? (char[]){exprs->delimiters.buffer[i], ' ', '\0'} : " ");
 	}
 
 	printf("]");

@@ -1,5 +1,5 @@
 {
-  description = "A simple Tiny BASIC compiler written in C";
+  description = "A BASIC compiler for RISC-V written in C";
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs?ref=nixos-unstable";
@@ -9,7 +9,7 @@
   outputs = { self, nixpkgs, flake-utils }: flake-utils.lib.eachDefaultSystem (system: let
 		pkgs = import nixpkgs { inherit system; };
 
-		pkg-name = "tinybc";
+		pkg-name = "basic";
 		build-deps = [ pkgs.clang ];
 	in {
 		defaultPackage = pkgs.stdenv.mkDerivation {
