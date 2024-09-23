@@ -21,98 +21,54 @@ char *stringify_token_type(TokenType token_type) {
 		case TOKEN_COMMA: return "COMMA";
 		case TOKEN_SEMICOLON: return "SEMICOLON";
 		case TOKEN_EOF: return "EOF";
-		case TOKEN_INVALID: return "INVALID";
 	}
 }
 
-void push_token(TokenLinkedList *list, TokenType type, char *literal, size_t line, size_t column) {
-	Token *token = malloc(sizeof(Token));
-	token->type = type;
-	token->literal = literal;
-	token->line = line;
-	token->column = column;
-	token->next = NULL;
-
-	if (list->head == NULL) {
-		// if list is empty then the head and tail will be the new token
-		list->head = token;
-		list->tail = token;
-	} else {
-		list->tail->next = token;
-		list->tail = token;
-	}
+void free_token(Token token) {
+	if (token.literal_type == LITERAL_STRING)
+		free(token.string_literal);
 }
 
-Token *pop_token(TokenLinkedList *list) {
-	if (list->head == NULL) {
-		printf("Error: cannot pop from empty linked list of tokens\n");
-		exit(EXIT_FAILURE);
-	}
-
-	Token *ret = list->head; // save the head (which we'll return)
-	list->head = ret->next; // update the head to be the node after it
-
-	// set tail to null if list is now empty
-	if (list->head == NULL)
-		list->tail = NULL;
-
-	return ret;
-}
-
-void free_token(Token *token) {
-	if (token->literal != NULL) free(token->literal);
-	free(token);
-}
-
-void free_token_linked_list(TokenLinkedList *list) {
-	Token *temp;
-
-	while (list->head != NULL) {
-		temp = list->head; // save current node
-		list->head = list->head->next; // move forward
-		free_token(temp); // free where we just came from
-	}
-
-	list->head = NULL;
-	list->tail = NULL;
-}
-
-LexerErrorList empty_lexer_error_list() {
-	LexerError *errors = malloc(0);
-	ensure_alloc(errors);
-	return (LexerErrorList){ errors, 0 };
-}
-
-void push_lexer_error(LexerErrorList *list, LexerError error) {
-	list->errors = realloc(list->errors, sizeof(LexerError) * (list->length + 1));
-	ensure_alloc(list->errors);
-	list->errors[list->length++] = error;
-}
-
-Lexer *new_lexer(char *code) {
+Lexer *new_lexer(char *code, size_t buffer_capacity) {
 	Lexer *lexer = malloc(sizeof(Lexer));
+	ensure_alloc(lexer);
 
 	lexer->code = code;
-	lexer->result = (LexerResult){
-		// these nulls are the heads and tails of linked lists of tokens
-		{ NULL, NULL },
-		{ NULL, NULL },
-		empty_lexer_error_list()
-	};
 	lexer->current_index = 0;
 	lexer->line = 1;
-	lexer-> column_start = 0; // index in the code of the first char in current column
+	lexer->column_start = 0;
+
+	Token *tokens = malloc(buffer_capacity * sizeof(Token));
+	ensure_alloc(tokens);
+
+	lexer->tokens = (TokenBuffer){
+		tokens,
+		buffer_capacity,
+		.length = 0,
+		.next_index = 0
+	};
 
 	return lexer;
 }
 
+void free_lexer(Lexer *lexer) {
+	for (size_t i = 0; i < lexer->tokens.length; i++)
+		if (lexer->tokens.tokens[i].literal_type == LITERAL_STRING)
+			free(lexer->tokens.tokens[i].string_literal);
+
+	free(lexer->tokens.tokens);
+	free(lexer);
+}
+
+Token *get_previous_token(TokenBuffer buffer) {
+	if (buffer.length == 0) return NULL;
+	else return &buffer.tokens[
+		(buffer.next_index == 0 ? buffer.length : buffer.next_index) - 1
+	];
+}
+
 inline char peek(Lexer *lexer) { return lexer->code[lexer->current_index]; }
 inline char consume(Lexer *lexer) { return lexer->code[lexer->current_index++]; }
-
-inline bool valid_variable_char(Lexer *lexer) {
-	char ch = peek(lexer);
-	return isalpha(ch) || ch == '_' || ch == '$';
-}
 
 bool case_insensitive_match(Lexer *lexer, char *str) {
 	for (size_t i = 0; i < strlen(str); i++)
@@ -122,185 +78,175 @@ bool case_insensitive_match(Lexer *lexer, char *str) {
 	return true;
 }
 
-// this is called when no valid token has been matched by the lexer
-void lexer_invalid_token(Lexer *lexer, size_t line, size_t column) {
-	Token previous_invalid = *lexer->result.invalid.tail;
-	
-	if (
-		// if there's already an invalid token
-		lexer->result.invalid.head != NULL &&
-		// and the current invalid token is right next to the previous one
-		previous_invalid.column + strlen(previous_invalid.literal) == column
-	)
-		// append the char to the previous invalid token
-		append_char(&previous_invalid.literal, consume(lexer));
-
-	// otherwise push a new invalid token
-	else push_token(
-		&lexer->result.invalid,
-		TOKEN_INVALID, alloc_char_as_str(consume(lexer)), line, column
-	);
+inline bool valid_variable_char(Lexer *lexer) {
+	char ch = peek(lexer);
+	return isalpha(ch) || ch == '_' || ch == '$';
 }
 
-LexerResult lex(char *code) {
-	Lexer *lexer = new_lexer(code);
+TokenResult _get_next_token(Lexer *lexer) {
+	// consume whitespace
+	while (peek(lexer) == ' ' || peek(lexer) == '\t') consume(lexer);
 
-	while (peek(lexer) != '\0') {
-		// consume whitespace
-		while (peek(lexer) == ' ' || peek(lexer) == '\t') consume(lexer);
-
-		// consume comments
-		if (peek(lexer) == '\'' || case_insensitive_match(lexer, "rem"))
-			while (peek(lexer) != '\n')
-				consume(lexer);
-
-		// line and column of token that's about to be determined
-		size_t l = lexer->line;
-		size_t c = lexer->current_index - lexer->column_start + 1;
-
-		if (peek(lexer) == '\n') {
+	// consume comments
+	if (peek(lexer) == '\'' || case_insensitive_match(lexer, "rem"))
+		while (peek(lexer) != '\n')
 			consume(lexer);
-			lexer->line++;
-			lexer->column_start = lexer->current_index;
-			continue;
-		}
 
-		#define single_char_token_case(char, type) \
-			case char: \
-				push_token(&lexer->result.valid, type, NULL, l, c); \
-				consume(lexer); \
-				continue;
-
-		#define push_single_char_literal(type) \
-			push_token(&lexer->result.valid, type, alloc_char_as_str(consume(lexer)), l, c); \
-			continue;
-
-		switch (peek(lexer)) {
-			case '+':
-			case '*':
-			case '/':
-			case '^': push_single_char_literal(TOKEN_BINARY_OP);
-			case '-': {
-				Token *previous_token = lexer->result.valid.tail;
-				char *literal = alloc_char_as_str(consume(lexer));
-				if (
-					previous_token != NULL &&
-					(previous_token->type == TOKEN_CLOSE_PAREN ||
-					previous_token->type == TOKEN_NUMBER ||
-					previous_token->type == TOKEN_NAME)
-				) push_token(&lexer->result.valid, TOKEN_BINARY_OP, literal, l, c);
-				else push_token(&lexer->result.valid, TOKEN_UNARY_OP, literal, l, c);
-				continue;
-			}
-			single_char_token_case('=', TOKEN_ASSIGN)
-			single_char_token_case('(', TOKEN_OPEN_PAREN)
-			single_char_token_case(')', TOKEN_CLOSE_PAREN)
-			case ',': push_single_char_literal(TOKEN_COMMA);
-			case ';': push_single_char_literal(TOKEN_SEMICOLON);
-		}
-
-		// keywords
-
-		#define keyword_token(keyword, type) \
-			if (case_insensitive_match(lexer, keyword)) { \
-				lexer->current_index += strlen(keyword); \
-				push_token(&lexer->result.valid, type, NULL, l, c); \
-				continue; \
-			}
-
-		keyword_token("let", TOKEN_LET)
-		keyword_token("print", TOKEN_PRINT)
-
-		// numbers
-
-		// consume leading zeros
-		while (peek(lexer) == '0') consume(lexer);
-
-		if (isdigit(peek(lexer)) || peek(lexer) == '.') {
-			BufferedString num_as_str = empty_buffered_string(4);
-			bool has_decimal = false;
-
-			for (size_t i = 0; isdigit(peek(lexer)) || peek(lexer) == '.'; i++) {
-				char ch = consume(lexer);
-
-				if (ch == '.') {
-					if (has_decimal)
-						push_lexer_error(&lexer->result.errors, (LexerError){
-							"A number cannot have two decimal points",
-							.line = l,
-							.start_column = c,
-							.error_column = c + i
-						});
-					else has_decimal = true;
-				}
-
-				buffered_string_append_char(&num_as_str, ch);
-			}
-
-			push_token(&lexer->result.valid, TOKEN_NUMBER, num_as_str.buffer, l, c);
-
-			continue;
-		}
-
-		// strings
-
-		if (peek(lexer) == '"') {
-			consume(lexer); // consume opening quotes
-			BufferedString string = empty_buffered_string(8);
-
-			while (peek(lexer) != '"') {
-				char ch = peek(lexer);
-				// if string ends early without quotes
-				if (ch == '\0' || ch == '\n') {
-					push_lexer_error(&lexer->result.errors, (LexerError){
-						"Expected closing double quotes to match the opening ones",
-						.line = l,
-						.start_column = c,
-						.error_column = lexer->current_index - lexer->column_start + 1
-					});
-					free(string.buffer);
-					goto continue_main_lexer_loop;
-				}
-
-				if (ch == '\\') {
-					consume(lexer); // consume backslash
-					char escaped_char = peek(lexer);
-					switch (escaped_char) {
-						case 'n': ch = '\n'; break;
-						case 't': ch = '\t'; break;
-						case '"': ch = '"'; break;
-						case '\\': ch = '\\'; break;
-						default: ch = escaped_char;
-					}
-				}
-
-				buffered_string_append_char(&string, ch);
-				consume(lexer);
-			}
-
-			consume(lexer); // consume closing quotes
-			push_token(&lexer->result.valid, TOKEN_STRING, string.buffer, l, c);
-			continue;
-		}
-
-		// names (vars/functions)
-
-		if (valid_variable_char(lexer)) {
-			BufferedString name = empty_buffered_string(4);
-			while (valid_variable_char(lexer))
-				buffered_string_append_char(&name, consume(lexer));
-			push_token(&lexer->result.valid, TOKEN_NAME, name.buffer, l, c);
-			continue;
-		}
-
-		lexer_invalid_token(lexer, l, c);
-
-		continue_main_lexer_loop:;
+	if (peek(lexer) == '\n') {
+		consume(lexer);
+		lexer->line++;
+		lexer->column_start = lexer->current_index;
 	}
 
-	LexerResult result = lexer->result;
+	// line and column of token that's about to be determined
+	size_t l = lexer->line;
+	size_t c = lexer->current_index - lexer->column_start + 1;
 
-	free(lexer);
+	// single char tokens
 
-	return result;
+	#define single_char_token(token_type) (TokenResult){ \
+		true, { .token = { token_type, LITERAL_CHAR, NULL, consume(lexer), .line = l, .column = c } } \
+	}
+
+	switch (peek(lexer)) {
+		case '\0': return (TokenResult){ true, { .token = { TOKEN_EOF, LITERAL_NONE, .line = l, .column = c } } };
+		case '+':
+		case '*':
+		case '/': return single_char_token(TOKEN_BINARY_OP);
+		case '-': {
+			Token *previous_token = get_previous_token(lexer->tokens);
+			if (
+				previous_token != NULL &&
+				(previous_token->type == TOKEN_CLOSE_PAREN ||
+				previous_token->type == TOKEN_NUMBER ||
+				previous_token->type == TOKEN_NAME)
+			) return single_char_token(TOKEN_BINARY_OP);
+			else return single_char_token(TOKEN_UNARY_OP);
+		}
+		case '=': return single_char_token(TOKEN_ASSIGN);
+		case '(': return single_char_token(TOKEN_OPEN_PAREN);
+		case ')': return single_char_token(TOKEN_CLOSE_PAREN);
+		case ',': return single_char_token(TOKEN_COMMA);
+		case ';': return single_char_token(TOKEN_SEMICOLON);
+	}
+
+	// keywords
+
+	#define match_keyword_token(keyword, token_type) \
+		if (case_insensitive_match(lexer, keyword)) { \
+			lexer->current_index += strlen(keyword); \
+			return (TokenResult){ true, { .token = { token_type, LITERAL_NONE, .line = l, .column = c } } }; \
+		}
+
+	match_keyword_token("let", TOKEN_LET)
+	match_keyword_token("print", TOKEN_PRINT)
+
+	// numbers
+
+	while (peek(lexer) == '0') consume(lexer); // consume leading zeros
+
+	if (isdigit(peek(lexer)) || peek(lexer) == '.') {
+		BufferedString num_as_str = empty_buffered_string(4);
+		bool has_decimal = false;
+
+		for (size_t i = 0; isdigit(peek(lexer)) || peek(lexer) == '.'; i++) {
+			char ch = consume(lexer);
+
+			if (ch == '.') {
+				if (has_decimal)
+					return (TokenResult){
+						false, { .error = { "A number cannot have two decimal points", l, c, c + i } }
+					};
+				else
+					has_decimal = true;
+			}
+
+			buffered_string_append_char(&num_as_str, ch);
+		}
+
+		return (TokenResult){
+			true, { .token = { TOKEN_NUMBER, LITERAL_STRING, num_as_str.buffer, '\0', l, c } }
+		};
+	}
+
+	// strings
+
+	if (peek(lexer) == '"') {
+		consume(lexer); // consume opening quotes
+		BufferedString string = empty_buffered_string(8);
+
+		while (peek(lexer) != '"') {
+			char ch = peek(lexer);
+
+			// if string ends early without quotes
+			if (ch == '\0' || ch == '\n') {
+				free(string.buffer);
+				return (TokenResult){ false, { .error = {
+					"Expected closing double quotes to match the opening ones",
+					l, c, lexer->current_index - lexer->column_start + 1
+				} } };
+			}
+
+			if (ch == '\\') {
+				consume(lexer); // consume backslash
+				char escaped_char = peek(lexer);
+				switch (escaped_char) {
+					case 'n': ch = '\n'; break;
+					case 't': ch = '\t'; break;
+					case '"': ch = '"'; break;
+					case '\\': ch = '\\'; break;
+					default: ch = escaped_char;
+				}
+			}
+
+			buffered_string_append_char(&string, ch);
+			consume(lexer);
+		}
+
+		consume(lexer); // consume closing quotes
+		return (TokenResult){ true, { .token = { TOKEN_STRING, LITERAL_STRING, string.buffer, '\0', l, c } } };
+	}
+
+	// names (vars/functions)
+
+	if (valid_variable_char(lexer)) {
+		BufferedString name = empty_buffered_string(4);
+		while (valid_variable_char(lexer))
+			buffered_string_append_char(&name, consume(lexer));
+		return (TokenResult){ true, { .token = { TOKEN_NAME, LITERAL_STRING, name.buffer, '\0', l, c } } };
+	}
+
+	return (TokenResult){ false, { .error = { "Invalid token", l, c, c } } };
+}
+
+TokenResult peek_token(Lexer *lexer) {
+	TokenResult token_result = _get_next_token(lexer);
+	TokenBuffer *buffer = &lexer->tokens;
+
+	if (token_result.success) {
+		Token token = token_result.result.token;
+
+		if (buffer->length < buffer->capacity)
+			buffer->length++;
+		else
+			free_token(buffer->tokens[buffer->next_index]);
+
+		buffer->tokens[buffer->next_index].type = token.type;
+		buffer->tokens[buffer->next_index].literal_type = token.literal_type;
+		buffer->tokens[buffer->next_index].string_literal = token.string_literal;
+		buffer->tokens[buffer->next_index].char_literal = token.char_literal;
+		buffer->tokens[buffer->next_index].line = token.line;
+		buffer->tokens[buffer->next_index].column = token.column;
+	}
+
+	return token_result;
+}
+
+TokenResult next_token(Lexer *lexer) {
+	TokenResult ret = peek_token(lexer);
+
+	lexer->tokens.next_index += 1;
+	lexer->tokens.next_index %= lexer->tokens.capacity;
+
+	return ret;
 }

@@ -1,6 +1,7 @@
 #ifndef INCLUDE_LEXER_H
 #define INCLUDE_LEXER_H
 
+#include <stddef.h>
 #include <stdbool.h>
 
 typedef enum {
@@ -16,74 +17,66 @@ typedef enum {
 	TOKEN_STRING,
 	TOKEN_COMMA,
 	TOKEN_SEMICOLON,
-	TOKEN_EOF,
-	TOKEN_INVALID
+	TOKEN_EOF
 } TokenType;
 
 extern char *stringify_token_type(TokenType token_type);
 
-typedef struct Token {
+typedef struct {
 	TokenType type;
-	char *literal;
-	size_t line;
-	size_t column;
-	struct Token *next;
+	enum {
+		LITERAL_STRING,
+		LITERAL_CHAR,
+		LITERAL_NONE
+	} literal_type;
+	char *string_literal;
+	char char_literal;
+	size_t line, column;
 } Token;
 
 typedef struct {
-	Token *head;
-	Token *tail;
-} TokenLinkedList;
-
-extern void push_token(
-	TokenLinkedList *list,
-	TokenType type,
-	char *literal,
-	size_t line,
-	size_t column
-);
-extern Token *pop_token(TokenLinkedList *list);
-extern void free_token(Token *token);
-extern void free_token_linked_list(TokenLinkedList *list);
-
-typedef struct {
 	char *message;
-	size_t line;
-	size_t start_column; // where erroneous token begins
-	size_t error_column; // column which causes error
-} LexerError;
+	size_t line, start_column, error_column;
+} Error;
 
 typedef struct {
-	LexerError *errors;
+	bool success;
+	union {
+		Token token;
+		Error error;
+	} result;
+} TokenResult;
+
+typedef struct {
+	Token *tokens;
+	size_t capacity;
 	size_t length;
-} LexerErrorList;
+	size_t next_index;
+} TokenBuffer;
 
-extern LexerErrorList empty_lexer_error_list();
-extern void push_lexer_error(LexerErrorList *list, LexerError error);
-
-typedef struct {
-	TokenLinkedList valid;
-	TokenLinkedList invalid;
-	LexerErrorList errors;
-} LexerResult;
+extern Token *get_previous_token(TokenBuffer buffer);
 
 typedef struct {
 	char *code;
-	LexerResult result;
 	size_t current_index;
 	size_t line;
-	size_t column_start;
+	size_t column_start; // index in code of first char in current column
+	TokenBuffer tokens;
 } Lexer;
 
-extern Lexer *new_lexer(char *code);
+extern Lexer *new_lexer(char *code, size_t buffer_capacity);
+extern void free_lexer(Lexer *lexer);
 
-// lexer helpers
 extern inline char peek(Lexer *lexer);
 extern inline char consume(Lexer *lexer);
-extern inline bool case_insensitive_match(Lexer *lexer, char *str);
-extern bool valid_variable_char(Lexer *lexer);
-extern void lexer_invalid_token(Lexer *lexer, size_t line, size_t column);
+extern bool case_insensitive_match(Lexer *lexer, char *str);
+extern inline bool valid_variable_char(Lexer *lexer);
 
-extern LexerResult lex(char *code);
+// this is where the actual tokenising happens
+extern TokenResult _get_next_token(Lexer *lexer);
+// these are the functions that will be used in the parser (these are the ones
+// which actually interact with the token buffer)
+extern TokenResult peek_token(Lexer *lexer);
+extern TokenResult next_token(Lexer *lexer);
 
 #endif // INCLUDE_LEXER_H

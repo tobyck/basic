@@ -81,7 +81,7 @@ void append_str_and_free(char **dest, char *src) {
 	free(src);
 }
 
-char *alloc_num_as_str(size_t number) {
+char *num_as_str(size_t number) {
 	size_t string_len;
 	if (number == 0) string_len = 2;
 	else string_len = (int)log10(number) + 2;
@@ -93,14 +93,8 @@ char *alloc_num_as_str(size_t number) {
 	return string;
 }
 
-char *alloc_char_as_str(char ch) {
-	char *string = malloc(2);
-	ensure_alloc(string);
-
-	string[0] = ch;
-	string[1] = '\0';
-
-	return string;
+char *char_as_str(char ch) {
+	return (char[]){ ch, '\0' };
 }
 
 BufferedString empty_buffered_string(size_t step) {

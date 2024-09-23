@@ -1,131 +1,39 @@
 #include <stdio.h>
 
 #include "debug.h"
-#include "utils.h"
-#include "lexer.h"
 
-void print_token(Token *token) {
-	printf("%s ", stringify_token_type(token->type));
-	if (token->literal != NULL)
-		printf("\"%s\" ", token->literal);
-	printf("at %zu:%zu", token->line, token->column);
+void print_token(Token token) {
+	printf("%s ", stringify_token_type(token.type));
+	switch (token.literal_type) {
+		case LITERAL_STRING: printf("\"%s\" ", token.string_literal); break;
+		case LITERAL_CHAR: printf("'%c' ", token.char_literal); break;
+		default: printf(" ");
+	}
+	printf("at %zu:%zu", token.line, token.column);
 }
 
-void print_token_linked_list(TokenLinkedList tokens) {
-	if (tokens.head == NULL) {
-		printf("[]\n");
-		return;
-	}
-
-	printf("[\n");
-
-	Token *current = tokens.head;
-	while (current != NULL) {
+void print_token_buffer_range(TokenBuffer buffer, size_t start, size_t end) {
+	for (size_t i = start; i < end; i++) {
 		printf("  ");
-		print_token(current);
-		if (current->next != NULL)
-			printf(",\n");
-		current = current->next;
+		print_token(buffer.tokens[i]);
+		if (i < end - 1) printf(",");
+		printf("\n");
 	}
-
-	printf("\n]\n");
 }
 
-void print_lexer_errors(LexerErrorList errors) {
-	if (errors.length == 0) {
+void print_token_buffer(TokenBuffer buffer) {
+	if (buffer.length == 0) {
 		printf("[]\n");
 		return;
 	}
 
 	printf("[\n");
 
-	for (size_t i = 0; i < errors.length; i++) {
-		LexerError err = errors.errors[i];
-		printf(
-			"  %s (erroneous token starts at: %zu:%zu, error at %zu:%zu)",
-			err.message,
-			err.line,
-			err.start_column,
-			err.line,
-			err.error_column
-		);
-		if (i < errors.length - 1) printf(",\n");
-	}
-	
-	printf("\n]\n");
-}
-
-void print_expr(Expr expr) {
-	switch (expr.type) {
-		case EXPR_NUMBER: printf("%s", expr.expr.number_literal); break;
-		case EXPR_STRING: printf("\"%s\"", expr.expr.string_literal); break;
-		case EXPR_VAR: printf("%s", expr.expr.variable); break;
-		case EXPR_CALL:
-			printf("(%s", expr.expr.call.name);
-			for (size_t i = 0; i < expr.expr.call.args->length; i++) {
-				printf(" ");
-				print_expr(expr.expr.call.args->exprs[i]);
-			}
-			printf(")");
-	}
-}
-
-void print_expr_list(ExprList *exprs) {
-	if (exprs->length == 0) {
-		printf("[]");
-		return;
+	if (buffer.next_index == 0) print_token_buffer_range(buffer, 0, buffer.length);
+	else {
+		print_token_buffer_range(buffer, buffer.next_index, buffer.length);
+		print_token_buffer_range(buffer, 0, buffer.next_index);
 	}
 
-	printf("[");
-
-	for (size_t i = 0; i < exprs->length; i++) {
-		print_expr(exprs->exprs[i]);
-		if (i < exprs->length - 1)
-			printf(exprs->stored_delimiters ? (char[]){exprs->delimiters.buffer[i], ' ', '\0'} : " ");
-	}
-
-	printf("]");
-}
-
-void print_ast(AST ast) {
-	if (ast.length == 0) {
-		printf("[]\n");
-		return;
-	}
-
-	printf("[\n");
-
-	for (size_t i = 0; i < ast.length; i++) {
-		printf("  ");
-		Statement s = ast.statements[i];
-		switch (s.type) {
-			case STATEMENT_ASSIGNMENT:
-				printf("ASSIGNMENT %c = ", s.statement.assignment.variable);
-				print_expr(s.statement.assignment.expr);
-				break;
-			case STATEMENT_PRINT:
-				printf("PRINT ");
-				print_expr_list(s.statement.print);
-		}
-	}
-
-	printf("\n]\n");
-}
-
-void print_parse_errors(ParseErrorList errors) {
-	if (errors.length == 0) {
-		printf("[]\n");
-		return;
-	}
-
-	printf("[\n");
-
-	for (size_t i = 0; i < errors.length; i++) {
-		printf("  '%s' at (", errors.errors[i].message);
-		print_token(errors.errors[i].token);
-		printf(")");
-		if (i < errors.length - 1) printf(",\n");
-	}
-
-	printf("\n]\n");
+	printf("]\n");
 }

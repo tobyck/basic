@@ -1,3 +1,4 @@
+12.4test_name
 rem this is a comment
 let n = 1 - 3 ^ 2 * -4
 print "the value of 2(n+1) is\n"; 2 * (n + 1)
