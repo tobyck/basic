@@ -45,7 +45,8 @@ Lexer *new_lexer(char *code, size_t buffer_capacity) {
 		tokens,
 		buffer_capacity,
 		.length = 0,
-		.next_index = 0
+		.next_index = 0,
+		.peeked_count = 0
 	};
 
 	return lexer;
@@ -62,9 +63,8 @@ void free_lexer(Lexer *lexer) {
 
 Token *get_previous_token(TokenBuffer buffer) {
 	if (buffer.length == 0) return NULL;
-	else return &buffer.tokens[
-		(buffer.next_index == 0 ? buffer.length : buffer.next_index) - 1
-	];
+	// this is so ugly :cry:
+	else return &buffer.tokens[(buffer.next_index == 0 ? buffer.length : buffer.next_index) - 1];
 }
 
 inline char peek(Lexer *lexer) { return lexer->code[lexer->current_index]; }
@@ -164,9 +164,7 @@ TokenResult _get_next_token(Lexer *lexer) {
 			buffered_string_append_char(&num_as_str, ch);
 		}
 
-		return (TokenResult){
-			true, { .token = { TOKEN_NUMBER, LITERAL_STRING, num_as_str.buffer, '\0', l, c } }
-		};
+		return (TokenResult){ true, { .token = { TOKEN_NUMBER, LITERAL_STRING, num_as_str.buffer, '\0', l, c } } };
 	}
 
 	// strings
@@ -219,8 +217,7 @@ TokenResult _get_next_token(Lexer *lexer) {
 	return (TokenResult){ false, { .error = { "Invalid token", l, c, c } } };
 }
 
-TokenResult peek_token(Lexer *lexer) {
-	TokenResult token_result = _get_next_token(lexer);
+void _write_token_result(Lexer *lexer, TokenResult token_result, size_t index) {
 	TokenBuffer *buffer = &lexer->tokens;
 
 	if (token_result.success) {
@@ -229,24 +226,38 @@ TokenResult peek_token(Lexer *lexer) {
 		if (buffer->length < buffer->capacity)
 			buffer->length++;
 		else
-			free_token(buffer->tokens[buffer->next_index]);
+			free_token(buffer->tokens[index]);
 
-		buffer->tokens[buffer->next_index].type = token.type;
-		buffer->tokens[buffer->next_index].literal_type = token.literal_type;
-		buffer->tokens[buffer->next_index].string_literal = token.string_literal;
-		buffer->tokens[buffer->next_index].char_literal = token.char_literal;
-		buffer->tokens[buffer->next_index].line = token.line;
-		buffer->tokens[buffer->next_index].column = token.column;
+		buffer->tokens[index].type = token.type;
+		buffer->tokens[index].literal_type = token.literal_type;
+		buffer->tokens[index].string_literal = token.string_literal;
+		buffer->tokens[index].char_literal = token.char_literal;
+		buffer->tokens[index].line = token.line;
+		buffer->tokens[index].column = token.column;
 	}
+}
 
+TokenResult peek_token(Lexer *lexer) {
+	TokenResult token_result = _get_next_token(lexer);
+	_write_token_result(lexer, token_result, lexer->tokens.next_index + (lexer->tokens.peeked_count++));
 	return token_result;
 }
 
 TokenResult next_token(Lexer *lexer) {
-	TokenResult ret = peek_token(lexer);
+	TokenResult token_result;
+
+	if (lexer->tokens.peeked_count == 0) {
+		token_result = _get_next_token(lexer);
+		_write_token_result(lexer, token_result, lexer->tokens.next_index);
+	} else {
+		token_result = (TokenResult){ true, {
+			.token = lexer->tokens.tokens[lexer->tokens.next_index + lexer->tokens.peeked_count]
+		} };
+		lexer->tokens.peeked_count--;
+	}
 
 	lexer->tokens.next_index += 1;
 	lexer->tokens.next_index %= lexer->tokens.capacity;
 
-	return ret;
+	return token_result;
 }

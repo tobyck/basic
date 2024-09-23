@@ -18,6 +18,8 @@ int main(int argc, char *argv[]) {
 	char *code = read_file(argv[1]);
 
 	Lexer *lexer = new_lexer(code, 3);
+	peek_token(lexer);
+	peek_token(lexer);
 	next_token(lexer);
 	next_token(lexer);
 	print_token_buffer(lexer->tokens);

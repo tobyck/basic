@@ -52,6 +52,7 @@ typedef struct {
 	size_t capacity;
 	size_t length;
 	size_t next_index;
+	size_t peeked_count;
 } TokenBuffer;
 
 extern Token *get_previous_token(TokenBuffer buffer);
@@ -74,6 +75,14 @@ extern inline bool valid_variable_char(Lexer *lexer);
 
 // this is where the actual tokenising happens
 extern TokenResult _get_next_token(Lexer *lexer);
+
+// if result is a success then write it to the buffer at the correct index
+extern void _write_token_result(
+	Lexer *lexer,
+	TokenResult token_result,
+	size_t index
+);
+
 // these are the functions that will be used in the parser (these are the ones
 // which actually interact with the token buffer)
 extern TokenResult peek_token(Lexer *lexer);

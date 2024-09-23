@@ -7,7 +7,7 @@ void print_token(Token token) {
 	switch (token.literal_type) {
 		case LITERAL_STRING: printf("\"%s\" ", token.string_literal); break;
 		case LITERAL_CHAR: printf("'%c' ", token.char_literal); break;
-		default: printf(" ");
+		default: break;
 	}
 	printf("at %zu:%zu", token.line, token.column);
 }
@@ -28,6 +28,8 @@ void print_token_buffer(TokenBuffer buffer) {
 	}
 
 	printf("[\n");
+
+	printf("  cap = %zu,\n  len = %zu,\n  next = %zu,\n  peeked = %zu\n  ----------\n", buffer.capacity, buffer.length, buffer.next_index, buffer.peeked_count);
 
 	if (buffer.next_index == 0) print_token_buffer_range(buffer, 0, buffer.length);
 	else {
