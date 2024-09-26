@@ -24,15 +24,12 @@ extern char *stringify_token_type(TokenType token_type);
 
 typedef struct {
 	TokenType type;
-	enum {
-		LITERAL_STRING,
-		LITERAL_CHAR,
-		LITERAL_NONE
-	} literal_type;
 	char *string_literal;
 	char char_literal;
 	size_t line, column;
 } Token;
+
+extern void free_token_literal(Token token);
 
 typedef struct {
 	char *message;
@@ -52,10 +49,8 @@ typedef struct {
 	size_t capacity;
 	size_t length;
 	size_t next_index;
-	size_t peeked_count;
+	bool peeked;
 } TokenBuffer;
-
-extern Token *get_previous_token(TokenBuffer buffer);
 
 typedef struct {
 	char *code;
@@ -87,5 +82,6 @@ extern void _write_token_result(
 // which actually interact with the token buffer)
 extern TokenResult peek_token(Lexer *lexer);
 extern TokenResult next_token(Lexer *lexer);
+extern Token *get_most_recent_token(Lexer *lexer);
 
 #endif // INCLUDE_LEXER_H

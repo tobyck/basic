@@ -6,7 +6,7 @@
 
 extern void ensure_alloc(void *ptr);
 extern char *read_file(char *path);
-extern char *alloc_empty_str();
+extern char *alloc_empty_str(void);
 extern void append_str(char **dest, char *src);
 extern void append_char(char **dest, char ch);
 extern void append_str_and_free(char **dest, char *src);

@@ -4,8 +4,7 @@
 #include <string.h>
 
 #include "utils.h"
-#include "debug.h"
-#include "lexer.h"
+#include "parser.h"
 
 int main(int argc, char *argv[]) {
 	if (argc > 2) {
@@ -17,13 +16,14 @@ int main(int argc, char *argv[]) {
 	
 	char *code = read_file(argv[1]);
 
-	Lexer *lexer = new_lexer(code, 3);
-	peek_token(lexer);
-	peek_token(lexer);
-	next_token(lexer);
-	next_token(lexer);
-	print_token_buffer(lexer->tokens);
-	free_lexer(lexer);
+	ParserResult parser_result = parse(code);
+
+	if (parser_result.success) {
+		free(parser_result.result.ast.statements);
+	} else {
+		printf("uh oh\n");
+	}
+
 	free(code);
 
 	return EXIT_SUCCESS;

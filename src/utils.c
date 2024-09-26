@@ -52,7 +52,7 @@ char *read_file(char *path) {
 	return buffer;
 }
 
-char *alloc_empty_str() {
+char *alloc_empty_str(void) {
 	char *string = malloc(1);
 	ensure_alloc(string);
 	string[0] = '\0';
